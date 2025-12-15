@@ -29,6 +29,7 @@
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticTask_t osStaticThreadDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -47,11 +48,16 @@
 /* USER CODE BEGIN Variables */
 
 /* USER CODE END Variables */
-/* Definitions for test */
-osThreadId_t testHandle;
-const osThreadAttr_t test_attributes = {
-  .name = "test",
-  .stack_size = 128 * 4,
+/* Definitions for chassis */
+osThreadId_t chassisHandle;
+uint32_t chassisBuffer[ 1024 ];
+osStaticThreadDef_t chassisControlBlock;
+const osThreadAttr_t chassis_attributes = {
+  .name = "chassis",
+  .cb_mem = &chassisControlBlock,
+  .cb_size = sizeof(chassisControlBlock),
+  .stack_mem = &chassisBuffer[0],
+  .stack_size = sizeof(chassisBuffer),
   .priority = (osPriority_t) osPriorityNormal,
 };
 
@@ -92,8 +98,8 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of test */
-  testHandle = osThreadNew(test_task, NULL, &test_attributes);
+  /* creation of chassis */
+  chassisHandle = osThreadNew(test_task, NULL, &chassis_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
