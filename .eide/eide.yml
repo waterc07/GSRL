@@ -164,9 +164,14 @@ virtualFolder:
                 - path: GSRL/Dependence/CMSIS-DSP/Source/TransformFunctions/TransformFunctionsF16.c
                 - path: GSRL/Dependence/CMSIS-DSP/Source/WindowFunctions/WindowFunctions.c
               folders: []
+    - name: chariot
+      files:
+        - path: chariot/src/crt_chassis.cpp
+        - path: chariot/src/crt_module.cpp
+      folders: []
     - name: Task
       files:
-        - path: Task/src/tsk_test.cpp
+        - path: Task/src/tsk_chassis.cpp
       folders: []
 dependenceList: []
 outDir: build

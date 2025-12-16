@@ -1,15 +1,23 @@
 /**
- ******************************************************************************
- * @file           : template.cpp
- * @brief          : 源文件模板
- ******************************************************************************
+ *******************************************************************************
+ * @file           : tsk_chassis.cpp
+ * @brief          : 舵轮底盘控制任务
+ *******************************************************************************
  * @attention
+ *
+ * 本文件实现舵轮底盘的 FreeRTOS 任务逻辑，主要负责：
+ * - 周期性运行底盘控制循环
+ * - 读取测试输入或遥控指令
+ * - 调用底盘控制器更新舵轮状态
+ *
+ * 该任务作为系统调度层的一部分，不包含具体运动学或底层驱动实现。
  *
  * Copyright (c) 2025 GMaster
  * All rights reserved.
  *
- ******************************************************************************
+ *******************************************************************************
  */
+
 /* Includes ------------------------------------------------------------------*/
 
 /* Typedef -------------------------------------------------------------------*/
@@ -24,23 +32,3 @@
 
 /* User code -----------------------------------------------------------------*/
 // C++命名规范示例
-#define UPPPER_CASE_SNAKE_MACRO
-const int UPPER_CASE_SNAKE_CONSTANT = 0;
-int g_snake_case_global_variable;
-void camelCaseFunction()
-{
-    int camelCaseVariable;
-}
-namespace PascalCaseNamespace
-{
-}
-enum PascalCaseEnum {
-    UPPER_CASE_SNAKE_ENUM_VALUE
-};
-struct PascalCaseStruct {
-    int PascalCaseStructMember;
-};
-class PascalCaseClass
-{
-    int m_camelCaseMemberVariable;
-};
