@@ -206,6 +206,9 @@ targets:
         - GSRL/Algorithm/inc
         - GSRL/Device/inc
         - GSRL/Dependence/eigen
+        - Task/src
+        - chariot/inc
+        - chariot/src
       libList: []
     excludeList: []
     toolchain: GCC
@@ -257,7 +260,7 @@ targets:
       OpenOCD:
         baseAddr: "0x08000000"
         bin: ""
-        interface: cmsis-dap
+        interface: stlink
         target: stm32f4x
       STLink:
         address: "0x08000000"
