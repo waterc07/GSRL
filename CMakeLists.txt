@@ -51,13 +51,16 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
-    Task/src/tsk_test.cpp
+    chariot/src/crt_chassis.cpp
+    chariot/src/crt_module.cpp
+    Task/src/tsk_chassis.cpp
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Task/inc
+    chariot/inc
 )
 
 # Add project symbols (macros)
