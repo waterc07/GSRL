@@ -21,88 +21,36 @@
 #pragma once
 
 /* Includes ------------------------------------------------------------------*/
-#include "crt_module.hpp"
-#include "para_chassis.hpp"
-#include "dvc_imu.hpp"
-#include "dvc_remotecontrol.hpp"
-#include "gsrl_common.h"
-
-/* Exported types ------------------------------------------------------------*/
+#include <vector>
+#include "crt_module.hpp"     // CrtModule
+// #include "para_chassis.hpp" // 如果你这里暂时没用到参数文件，可以先不 include
 
 class CrtChassis
 {
 public:
-    // 底盘控制模式
-    enum ChassisMode
-    {
-        CHASSIS_NO_FORCE, // 无力/急停
-        MANUAL_CONTROL,   // 手动遥控
-        AUTO_CONTROL      // 自动/视觉控制
-    };
-
     struct Config
     {
-        CrtModule *module; // 舵轮模块实例（需外部管理生命周期）
+        CrtModule *module; // 舵轮模块实例（外部管理生命周期）
         float wheelX;      // 安装位置 X (m)
         float wheelY;      // 安装位置 Y (m)
-        float wheelRadius; // 轮子半径 (m)，用于线速度转角速度
+        float wheelRadius; // 轮子半径 (m)
     };
 
     explicit CrtChassis(const std::vector<Config> &modules);
 
-    CrtChassis(MotorGM6020* front_SteerLeftMotor, MotorGM6020* front_SteerRightMotor,
-               MotorGM6020* back_SteerLeftMotor, MotorGM6020* back_SteerRightMotor,
-               MotorM3508* front_WheelLeftMotor, MotorM3508* front_WheelRightMotor,
-               MotorM3508* back_WheelLeftMotor, MotorM3508* back_WheelRightMotor,
-               IMU* imu);
-    
-    CrtChassis() = default;
-
     void init();
     void setCmd(float vx, float vy, float wz);
-    void controlLoop(); // Task loop
-    void imuLoop();     // IMU update loop (high freq)
-    void receiveChassisMotorDataFromISR(const can_rx_message_t *rxMessage);
-    void receiveRemoteControlDataFromISR(const uint8_t *rxData);
     void update(float dt);
 
 private:
-    std::vector<Config> m_modules; // 内部持有的模块列表
-    
-    ChassisMode m_chassisMode;
-    
-    float m_vx; // 缓存的目标 Vx
-    float m_vy; // 缓存的目标 Vy
-    float m_wz; // 缓存的目标 Wz
+    std::vector<Config> m_modules;
 
-    // 电机
-    MotorGM6020 *m_front_SteerLeftMotor;
-    MotorGM6020 *m_front_SteerRightMotor;
-    MotorGM6020 *m_back_SteerLeftMotor;
-    MotorGM6020 *m_back_SteerRightMotor;
-    MotorM3508 *m_front_WheelLeftMotor;
-    MotorM3508 *m_front_WheelRightMotor;
-    MotorM3508 *m_back_WheelLeftMotor;
-    MotorM3508 *m_back_WheelRightMotor;
-    
-    // IMU
-    IMU *m_imu;
-    EulerAngle m_eulerAngle;
+    float m_vx{0.0f};
+    float m_vy{0.0f};
+    float m_wz{0.0f};
 
-    // 遥控器
-    Dr16RemoteControl m_remoteControl;
-
-    // 标志位
-    bool m_isInitComplete;
-
-private:
-    void modeSelect();
-    void targetSpeedplan();
-    void motorControl();
-    void transmitChassisMotorData();
-    inline fp32 rcStickDeadZoneFilter(const fp32 &rcStickValue);
+    bool m_isInitComplete{false};
 };
-
 /* Exported constants --------------------------------------------------------*/
 
 /* Exported macro ------------------------------------------------------------*/
