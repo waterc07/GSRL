@@ -27,7 +27,7 @@
 
 /* Define --------------------------------------------------------------------*/
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.14159265358979323846f
 #endif
 
 /* Macro ---------------------------------------------------------------------*/
@@ -39,30 +39,27 @@
 /* User code -----------------------------------------------------------------*/
 
 CrtModule::CrtModule(MotorGM6020 *steerMotor, MotorM3508 *driveMotor)
+    : m_steerMotor(steerMotor),
+      m_driveMotor(driveMotor),
+      mTargetAngle(0.0f),
+      mTargetSpeed(0.0f),
+      mCurrentAngle(0.0f),
+      mLastRawAngle(0.0f),
+      mAngleAccumulated(0.0f)
 {
-    /* 绑定电机对象（外部需确保非空） */
-    m_steerMotor = steerMotor;
-    m_driveMotor = driveMotor;
-
-    /* 初始化目标指令 */
-    targetAngle = 0.0f;
-    targetSpeed = 0.0f;
-
-    /* 初始化角度状态 */
-    currentAngle     = 0.0f;
-    lastRawAngle     = 0.0f;
-    angleAccumulated = 0.0f;
 }
 
 void CrtModule::setTarget(float targetAngle, float targetSpeed)
 {
     /* 保存目标指令，不在此处进行任何处理 */
-    this->targetAngle = targetAngle;
-    this->targetSpeed = targetSpeed;
+    mTargetAngle = targetAngle;
+    mTargetSpeed = targetSpeed;
 }
 
 void CrtModule::update(float dt)
 {
+    (void)dt;
+
     /* ====================== 0. 基本保护 ====================== */
     if (m_steerMotor == nullptr || m_driveMotor == nullptr)
     {
@@ -74,44 +71,44 @@ void CrtModule::update(float dt)
     float rawAngle = m_steerMotor->getCurrentAngle();
 
     /* ====================== 2. 构建连续舵向角 ====================== */
-    float deltaAngle = rawAngle - lastRawAngle;
+    float deltaAngle = rawAngle - mLastRawAngle;
 
     /* 处理跨越 0 / 2π 边界产生的角度跳变 */
-    if (deltaAngle > M_PI)
+    if (deltaAngle > (float)M_PI)
     {
-        deltaAngle -= 2.0f * M_PI;
+        deltaAngle -= 2.0f * (float)M_PI;
     }
-    else if (deltaAngle < -M_PI)
+    else if (deltaAngle < -(float)M_PI)
     {
-        deltaAngle += 2.0f * M_PI;
+        deltaAngle += 2.0f * (float)M_PI;
     }
 
-    angleAccumulated += deltaAngle;
-    currentAngle = angleAccumulated;
-    lastRawAngle = rawAngle;
+    mAngleAccumulated += deltaAngle;
+    mCurrentAngle = mAngleAccumulated;
+    mLastRawAngle = rawAngle;
 
     /* ====================== 3. 最短转向与方向优化 ====================== */
     /* 先将误差压到 (-π, π] */
-    float angleError = wrapToPi(targetAngle - currentAngle);
+    float angleError = wrapToPi(mTargetAngle - mCurrentAngle);
 
     /* 默认驱动目标不反向 */
-    float driveSpeedCmd = targetSpeed;
+    float driveSpeedCmd = mTargetSpeed;
 
     /* 若误差超过 ±90°，执行 π 翻转并反向驱动轮方向 */
-    if (angleError > (M_PI * 0.5f))
+    if (angleError > ((float)M_PI * 0.5f))
     {
-        angleError -= M_PI;
+        angleError -= (float)M_PI;
         driveSpeedCmd = -driveSpeedCmd;
     }
-    else if (angleError < -(M_PI * 0.5f))
+    else if (angleError < -((float)M_PI * 0.5f))
     {
-        angleError += M_PI;
+        angleError += (float)M_PI;
         driveSpeedCmd = -driveSpeedCmd;
     }
 
     /* ====================== 4. 将“最短误差”转回“电机目标角” ====================== */
     /* 电机接口 setTargetAngle() 期望目标角为 [0, 2π)，所以这里构造一个“就近目标角” */
-    float optimizedTargetAngleContinuous = currentAngle + angleError;
+    float optimizedTargetAngleContinuous = mCurrentAngle + angleError;
     float optimizedTargetAngleWrapped = wrapTo0To2Pi(optimizedTargetAngleContinuous);
 
     /* ====================== 5. 舵向角度闭环（GM6020） ====================== */
@@ -124,30 +121,24 @@ void CrtModule::update(float dt)
     (void)m_driveMotor->angularVelocityClosedloopControl(); /* 生成电机控制数据 */
 
     /* ====================== 7. 说明 ====================== */
-    /* 本模块不发送 CAN，只更新电机对象的控制数据；发送由既有的 CAN/Task 统一完成 */
+    /* 本模块不发送 CAN，只更新电机对象的控制数据；发送由 Chassis 统一完成 */
+}
+float CrtModule::wrapToPi(float a)
+{
+    const float pi    = (float)M_PI;
+    const float twoPi = 2.0f * pi;
+
+    // Map to (-pi, pi]
+    while (a >  pi)  a -= twoPi;
+    while (a <= -pi) a += twoPi;
+    return a;
 }
 
-float CrtModule::wrapToPi(float angle)
+float CrtModule::wrapTo0To2Pi(float a)
 {
-    while (angle > M_PI)
-    {
-        angle -= 2.0f * M_PI;
-    }
-    while (angle <= -M_PI)
-    {
-        angle += 2.0f * M_PI;
-    }
-    return angle;
-}
+    const float twoPi = 2.0f * (float)M_PI;
 
-float CrtModule::wrapTo0To2Pi(float angle)
-{
-    /* 将角度映射到 [0, 2π) */
-    float twoPi = 2.0f * (float)M_PI;
-    float wrapped = std::fmod(angle, twoPi);
-    if (wrapped < 0.0f)
-    {
-        wrapped += twoPi;
-    }
-    return wrapped;
+    a = std::fmod(a, twoPi);
+    if (a < 0.0f) a += twoPi;
+    return a;
 }

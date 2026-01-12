@@ -54,6 +54,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     chariot/src/crt_chassis.cpp
     chariot/src/crt_module.cpp
     Task/src/tsk_chassis.cpp
+    Task/src/tsk_isr.cpp
 )
 
 # Add include paths
