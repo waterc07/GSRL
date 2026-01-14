@@ -26,6 +26,10 @@
 #include "stm32f4xx_hal_can.h"
 #include "tsk_isr.hpp"
 #include "drv_misc.h"
+#include "crt_module.hpp"
+#include "para_chassis.hpp"
+#include "alg_pid.hpp"
+#include <vector>
 
 /* Typedef -------------------------------------------------------------------*/
 
@@ -35,6 +39,64 @@
 
 /* Variables -----------------------------------------------------------------*/
 
+static SimplePID::PIDParam steerPidParamFl = steerPidParam;
+static SimplePID::PIDParam steerPidParamBl = steerPidParam;
+static SimplePID::PIDParam steerPidParamBr = steerPidParam;
+static SimplePID::PIDParam steerPidParamFr = steerPidParam;
+
+static SimplePID::PIDParam drivePidParamFl = drivePidParam;
+static SimplePID::PIDParam drivePidParamBl = drivePidParam;
+static SimplePID::PIDParam drivePidParamBr = drivePidParam;
+static SimplePID::PIDParam drivePidParamFr = drivePidParam;
+
+
+static SimplePID steerPidFl((SimplePID::PIDMode)0, steerPidParamFl, nullptr);
+static SimplePID steerPidBl((SimplePID::PIDMode)0, steerPidParamBl, nullptr);
+static SimplePID steerPidBr((SimplePID::PIDMode)0, steerPidParamBr, nullptr);
+static SimplePID steerPidFr((SimplePID::PIDMode)0, steerPidParamFr, nullptr);
+
+static SimplePID drivePidFl((SimplePID::PIDMode)0, drivePidParamFl, nullptr);
+static SimplePID drivePidBl((SimplePID::PIDMode)0, drivePidParamBl, nullptr);
+static SimplePID drivePidBr((SimplePID::PIDMode)0, drivePidParamBr, nullptr);
+static SimplePID drivePidFr((SimplePID::PIDMode)0, drivePidParamFr, nullptr);
+
+/* DJI ID 占位：装车后改这里即可 */
+static constexpr uint8_t steerDjiIdFl = 1;
+static constexpr uint8_t steerDjiIdBl = 2;
+static constexpr uint8_t steerDjiIdBr = 3;
+static constexpr uint8_t steerDjiIdFr = 4;
+
+static constexpr uint8_t driveDjiIdFl = 5;
+static constexpr uint8_t driveDjiIdBl = 6;
+static constexpr uint8_t driveDjiIdBr = 7;
+static constexpr uint8_t driveDjiIdFr = 8;
+
+/* 舵向零点：只用 encoderOffset*/
+static MotorGM6020 steerMotorFl(steerDjiIdFl, &steerPidFl, steerZeroOffset[0]);
+static MotorGM6020 steerMotorBl(steerDjiIdBl, &steerPidBl, steerZeroOffset[1]);
+static MotorGM6020 steerMotorBr(steerDjiIdBr, &steerPidBr, steerZeroOffset[2]);
+static MotorGM6020 steerMotorFr(steerDjiIdFr, &steerPidFr, steerZeroOffset[3]);
+
+static MotorM3508 driveMotorFl(driveDjiIdFl, &drivePidFl, 0, static_cast<fp32>(driveGearboxRatio));
+static MotorM3508 driveMotorBl(driveDjiIdBl, &drivePidBl, 0, static_cast<fp32>(driveGearboxRatio));
+static MotorM3508 driveMotorBr(driveDjiIdBr, &drivePidBr, 0, static_cast<fp32>(driveGearboxRatio));
+static MotorM3508 driveMotorFr(driveDjiIdFr, &drivePidFr, 0, static_cast<fp32>(driveGearboxRatio));
+
+static CrtModule moduleFl(&steerMotorFl, &driveMotorFl);
+static CrtModule moduleBl(&steerMotorBl, &driveMotorBl);
+static CrtModule moduleBr(&steerMotorBr, &driveMotorBr);
+static CrtModule moduleFr(&steerMotorFr, &driveMotorFr);
+
+/* mModules 顺序固定：0=FL, 1=BL, 2=BR, 3=FR */
+static std::vector<CrtChassis::Config> chassisModules = {
+    {&moduleFl, +halfWheelBase, +halfTrackWidth, wheelRadius},
+    {&moduleBl, -halfWheelBase, +halfTrackWidth, wheelRadius},
+    {&moduleBr, -halfWheelBase, -halfTrackWidth, wheelRadius},
+    {&moduleFr, +halfWheelBase, -halfTrackWidth, wheelRadius}
+};
+
+/* IMU 暂时 nullptr：你想保留 controlLoop，后续需要小陀螺再接 IMU 指针 */
+CrtChassis chassis(chassisModules, nullptr);
 /* Function prototypes -------------------------------------------------------*/
 
 /* User code -----------------------------------------------------------------*/
@@ -184,7 +246,6 @@ void CrtChassis::targetSpeedPlan()
     }
 
     if (mChassisMode == ManualControl) {
-        /* 遥控器摇杆死区已由 Dr16RemoteControl::applyStickDeadZone 统一处理 */
         const fp32 leftX  = mRemoteControl.getLeftStickX();
         const fp32 leftY  = mRemoteControl.getLeftStickY();
         const fp32 rightX = mRemoteControl.getRightStickX();
@@ -201,7 +262,6 @@ void CrtChassis::targetSpeedPlan()
 
 void CrtChassis::motorControl()
 {
-    /* dt：先用固定周期（与 Task 周期一致即可），后续可改为 DWT 计算 */
     constexpr float controlDt = 0.001f; // 1ms
     update(controlDt);
 }
