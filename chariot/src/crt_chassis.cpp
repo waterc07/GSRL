@@ -39,21 +39,28 @@
 
 /* Variables -----------------------------------------------------------------*/
 
-static SimplePID::PIDParam steerPidParamFl = steerPidParam;
-static SimplePID::PIDParam steerPidParamBl = steerPidParam;
-static SimplePID::PIDParam steerPidParamBr = steerPidParam;
-static SimplePID::PIDParam steerPidParamFr = steerPidParam;
+/* --- 舵向：每轮串级 PID 参数复制（因为构造函数要非 const 引用） --- */
+static SimplePID::PIDParam steerOuterParamFl = steerAngleOuterPidParam;
+static SimplePID::PIDParam steerInnerParamFl = steerSpeedInnerPidParam;
+static CascadePID steerPidFl(steerOuterParamFl, steerInnerParamFl);
 
+static SimplePID::PIDParam steerOuterParamBl = steerAngleOuterPidParam;
+static SimplePID::PIDParam steerInnerParamBl = steerSpeedInnerPidParam;
+static CascadePID steerPidBl(steerOuterParamBl, steerInnerParamBl);
+
+static SimplePID::PIDParam steerOuterParamBr = steerAngleOuterPidParam;
+static SimplePID::PIDParam steerInnerParamBr = steerSpeedInnerPidParam;
+static CascadePID steerPidBr(steerOuterParamBr, steerInnerParamBr);
+
+static SimplePID::PIDParam steerOuterParamFr = steerAngleOuterPidParam;
+static SimplePID::PIDParam steerInnerParamFr = steerSpeedInnerPidParam;
+static CascadePID steerPidFr(steerOuterParamFr, steerInnerParamFr);
+
+/* --- 舵向电机：controller 换成 CascadePID --- */
 static SimplePID::PIDParam drivePidParamFl = drivePidParam;
 static SimplePID::PIDParam drivePidParamBl = drivePidParam;
 static SimplePID::PIDParam drivePidParamBr = drivePidParam;
 static SimplePID::PIDParam drivePidParamFr = drivePidParam;
-
-
-static SimplePID steerPidFl((SimplePID::PIDMode)0, steerPidParamFl, nullptr);
-static SimplePID steerPidBl((SimplePID::PIDMode)0, steerPidParamBl, nullptr);
-static SimplePID steerPidBr((SimplePID::PIDMode)0, steerPidParamBr, nullptr);
-static SimplePID steerPidFr((SimplePID::PIDMode)0, steerPidParamFr, nullptr);
 
 static SimplePID drivePidFl((SimplePID::PIDMode)0, drivePidParamFl, nullptr);
 static SimplePID drivePidBl((SimplePID::PIDMode)0, drivePidParamBl, nullptr);
@@ -66,10 +73,10 @@ static constexpr uint8_t steerDjiIdBl = 2;
 static constexpr uint8_t steerDjiIdBr = 3;
 static constexpr uint8_t steerDjiIdFr = 4;
 
-static constexpr uint8_t driveDjiIdFl = 5;
-static constexpr uint8_t driveDjiIdBl = 6;
-static constexpr uint8_t driveDjiIdBr = 7;
-static constexpr uint8_t driveDjiIdFr = 8;
+static constexpr uint8_t driveDjiIdFl = 1;
+static constexpr uint8_t driveDjiIdBl = 2;
+static constexpr uint8_t driveDjiIdBr = 3;
+static constexpr uint8_t driveDjiIdFr = 4;
 
 /* 舵向零点：只用 encoderOffset*/
 static MotorGM6020 steerMotorFl(steerDjiIdFl, &steerPidFl, steerZeroOffset[0]);
@@ -247,13 +254,14 @@ void CrtChassis::targetSpeedPlan()
 
     if (mChassisMode == ManualControl) {
         const fp32 leftX  = mRemoteControl.getLeftStickX();
-        const fp32 leftY  = mRemoteControl.getLeftStickY();
+        //const fp32 leftY  = mRemoteControl.getLeftStickY();
         const fp32 rightX = mRemoteControl.getRightStickX();
+        const fp32 rightY = mRemoteControl.getRightStickY();
 
         /* 约定：左摇杆平移，右摇杆X旋转（坐标系符号后续统一） */
-        mVx = leftY;
-        mVy = leftX;
-        mWz = rightX;
+        mVx = rightX;
+        mVy = rightY;
+        mWz = leftX;
         return;
     }
 
@@ -262,7 +270,17 @@ void CrtChassis::targetSpeedPlan()
 
 void CrtChassis::motorControl()
 {
-    constexpr float controlDt = 0.001f; // 1ms
+    constexpr float controlDt = 0.001f;
+
+    if (mChassisMode == ChassisNoForce) {
+        for (auto &cfg : mModules) {
+            if (cfg.module == nullptr) continue;
+            if (auto *s = cfg.module->getSteerMotor()) s->openloopControl(0.0f);
+            if (auto *d = cfg.module->getDriveMotor()) d->openloopControl(0.0f);
+        }
+        return; 
+    }
+
     update(controlDt);
 }
 

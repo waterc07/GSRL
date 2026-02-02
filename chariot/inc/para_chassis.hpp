@@ -65,17 +65,20 @@ static constexpr float wheelRadius = 0.03f;
 
 /* ====================== 舵向电机（GM6020）参数 ====================== */
 
-/**
- * @brief 舵向电机角度环 PID 参数
- * @note 单位：rad
- */
-static constexpr SimplePID::PIDParam steerPidParam = {
-    .Kp = 8.0f,
-    .Ki = 0.0f,
-    .Kd = 0.1f,
+static constexpr SimplePID::PIDParam steerAngleOuterPidParam = {
+    .Kp             = 4.0f,
+    .Ki             = 0.0f,
+    .Kd             = 0.0f,
+    .outputLimit    = 20.0f, 
+    .intergralLimit = 0.0f};
+
+static constexpr SimplePID::PIDParam steerSpeedInnerPidParam = {
+    .Kp             = 500.0f,
+    .Ki             = 0.0f,
+    .Kd             = 0.0f,
     .outputLimit    = 16000.0f,
-    .intergralLimit = 3000.0f
-};
+    .intergralLimit = 3000.0f};
+
 
 /**
  * @brief 舵向电机机械零点偏移（GM6020）
