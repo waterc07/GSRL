@@ -28,19 +28,6 @@
 
 /* Exported types ------------------------------------------------------------*/
 
-/**
- * @brief 舵轮编号（逆时针）
- * @note 0=左前(FL), 1=左后(BL), 2=右后(BR), 3=右前(FR)
- */
-enum class ChassisWheelID : uint8_t
-{
-    FrontLeft  = 0,   // FL
-    BackLeft   = 1,   // BL
-    BackRight  = 2,   // BR
-    FrontRight = 3,   // FR
-    WheelCount
-};
-
 /* Exported constants --------------------------------------------------------*/
 
 /* ====================== 底盘几何参数 ====================== */
@@ -49,27 +36,35 @@ enum class ChassisWheelID : uint8_t
  * @brief 底盘前后轮距的一半
  * @note 单位：m
  */
-static constexpr float halfWheelBase = 0.10f;
+static constexpr float halfWheelBase = 0.186975f;
 
 /**
  * @brief 底盘左右轮距的一半
  * @note 单位：m
  */
-static constexpr float halfTrackWidth = 0.10f;
+static constexpr float halfTrackWidth = 0.186975f;
 
 /**
  * @brief 轮子半径
  * @note 单位：m
  */
-static constexpr float wheelRadius = 0.03f;
+static constexpr float wheelRadius = 0.0525f;
+
+/**
+ * @brief 旋转速度增益系数
+ * @note 用于放大自转角速度，使得自转速度与平移速度相匹配
+ *       计算公式：1 / sqrt(halfWheelBase² + halfTrackWidth²)
+ *       当前值：1 / sqrt(0.186975² + 0.186975²) ≈ 3.78
+ */
+static constexpr float rotationGain = 3.78f;
 
 /* ====================== 舵向电机（GM6020）参数 ====================== */
 
 static constexpr SimplePID::PIDParam steerAngleOuterPidParam = {
-    .Kp             = 4.0f,
+    .Kp             = 50.0f,
     .Ki             = 0.0f,
     .Kd             = 0.0f,
-    .outputLimit    = 20.0f, 
+    .outputLimit    = 30.0f,
     .intergralLimit = 0.0f};
 
 static constexpr SimplePID::PIDParam steerSpeedInnerPidParam = {
@@ -79,21 +74,6 @@ static constexpr SimplePID::PIDParam steerSpeedInnerPidParam = {
     .outputLimit    = 16000.0f,
     .intergralLimit = 3000.0f};
 
-
-/**
- * @brief 舵向电机机械零点偏移（GM6020）
- * @note 顺序严格对应编号 0~3（FL, BL, BR, FR）
- * @attention
- *   舵向零点仅通过 GM6020 的 encoderOffset 处理，
- *   Module / Chassis 层不得再进行角度补偿
- */
-static constexpr uint16_t steerZeroOffset[4] = {
-    0,  // [0] FL 左前
-    0,  // [1] BL 左后
-    0,  // [2] BR 右后
-    0   // [3] FR 右前
-};
-
 /* ====================== 驱动电机（M3508）参数 ====================== */
 
 /**
@@ -101,18 +81,11 @@ static constexpr uint16_t steerZeroOffset[4] = {
  * @note 单位：rad/s
  */
 static constexpr SimplePID::PIDParam drivePidParam = {
-    .Kp = 10.0f,
-    .Ki = 0.0f,
-    .Kd = 0.0f,
+    .Kp             = 500.0f,
+    .Ki             = 0.0f,
+    .Kd             = 0.0f,
     .outputLimit    = 16000.0f,
-    .intergralLimit = 3000.0f
-};
-
-/**
- * @brief M3508 驱动电机减速比
- * @note 若使用 19:1 减速箱，则填写 19
- */
-static constexpr uint8_t driveGearboxRatio = 19;
+    .intergralLimit = 3000.0f};
 
 /* Exported macro ------------------------------------------------------------*/
 

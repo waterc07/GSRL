@@ -1,7 +1,7 @@
 {
     "clangd.arguments": [
         "--compile-commands-dir=build/Debug",
-        "--query-driver=D:\\Coding\\Envs\\Compiler\\arm-gnu\\bin\\arm-none-eabi-*",
+        "--query-driver=D:\\Software\\Dev\\Scoop\\apps\\gcc-arm-none-eabi\\15.2.rel1\\bin\\arm-none-eabi-*",
         "--clang-tidy",
         "--pch-storage=memory"
     ]

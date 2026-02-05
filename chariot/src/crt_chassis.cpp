@@ -39,6 +39,11 @@
 
 /* Variables -----------------------------------------------------------------*/
 
+/* --- 调试用全局变量：用于实时监看底盘速度指令 --- */
+float debugVx = 0.0f; // 底盘横向速度 (m/s)
+float debugVy = 0.0f; // 底盘前后速度 (m/s)
+float debugWz = 0.0f; // 底盘旋转角速度 (rad/s)
+
 /* --- 舵向：每轮串级 PID 参数复制（因为构造函数要非 const 引用） --- */
 static SimplePID::PIDParam steerOuterParamFl = steerAngleOuterPidParam;
 static SimplePID::PIDParam steerInnerParamFl = steerSpeedInnerPidParam;
@@ -67,27 +72,16 @@ static SimplePID drivePidBl((SimplePID::PIDMode)0, drivePidParamBl, nullptr);
 static SimplePID drivePidBr((SimplePID::PIDMode)0, drivePidParamBr, nullptr);
 static SimplePID drivePidFr((SimplePID::PIDMode)0, drivePidParamFr, nullptr);
 
-/* DJI ID 占位：装车后改这里即可 */
-static constexpr uint8_t steerDjiIdFl = 1;
-static constexpr uint8_t steerDjiIdBl = 2;
-static constexpr uint8_t steerDjiIdBr = 3;
-static constexpr uint8_t steerDjiIdFr = 4;
-
-static constexpr uint8_t driveDjiIdFl = 1;
-static constexpr uint8_t driveDjiIdBl = 2;
-static constexpr uint8_t driveDjiIdBr = 3;
-static constexpr uint8_t driveDjiIdFr = 4;
-
 /* 舵向零点：只用 encoderOffset*/
-static MotorGM6020 steerMotorFl(steerDjiIdFl, &steerPidFl, steerZeroOffset[0]);
-static MotorGM6020 steerMotorBl(steerDjiIdBl, &steerPidBl, steerZeroOffset[1]);
-static MotorGM6020 steerMotorBr(steerDjiIdBr, &steerPidBr, steerZeroOffset[2]);
-static MotorGM6020 steerMotorFr(steerDjiIdFr, &steerPidFr, steerZeroOffset[3]);
+static MotorGM6020 steerMotorFl(1, &steerPidFl, 6442);
+static MotorGM6020 steerMotorBl(2, &steerPidBl, 4520);
+static MotorGM6020 steerMotorBr(3, &steerPidBr, 2418);
+static MotorGM6020 steerMotorFr(4, &steerPidFr, 2360);
 
-static MotorM3508 driveMotorFl(driveDjiIdFl, &drivePidFl, 0, static_cast<fp32>(driveGearboxRatio));
-static MotorM3508 driveMotorBl(driveDjiIdBl, &drivePidBl, 0, static_cast<fp32>(driveGearboxRatio));
-static MotorM3508 driveMotorBr(driveDjiIdBr, &drivePidBr, 0, static_cast<fp32>(driveGearboxRatio));
-static MotorM3508 driveMotorFr(driveDjiIdFr, &drivePidFr, 0, static_cast<fp32>(driveGearboxRatio));
+static MotorM3508 driveMotorFl(1, &drivePidFl, 0, 14.882353f);
+static MotorM3508 driveMotorBl(2, &drivePidBl, 0, 14.882353f);
+static MotorM3508 driveMotorBr(3, &drivePidBr, 0, 14.882353f);
+static MotorM3508 driveMotorFr(4, &drivePidFr, 0, 14.882353f);
 
 static CrtModule moduleFl(&steerMotorFl, &driveMotorFl);
 static CrtModule moduleBl(&steerMotorBl, &driveMotorBl);
@@ -99,8 +93,7 @@ static std::vector<CrtChassis::Config> chassisModules = {
     {&moduleFl, +halfWheelBase, +halfTrackWidth, wheelRadius},
     {&moduleBl, -halfWheelBase, +halfTrackWidth, wheelRadius},
     {&moduleBr, -halfWheelBase, -halfTrackWidth, wheelRadius},
-    {&moduleFr, +halfWheelBase, -halfTrackWidth, wheelRadius}
-};
+    {&moduleFr, +halfWheelBase, -halfTrackWidth, wheelRadius}};
 
 /* IMU 暂时 nullptr：你想保留 controlLoop，后续需要小陀螺再接 IMU 指针 */
 CrtChassis chassis(chassisModules, nullptr);
@@ -116,7 +109,7 @@ CrtChassis::CrtChassis(const std::vector<Config> &modules, IMU *imu)
       mWz(0.0f),
       mImu(imu),
       mEulerAngle{0.0f, 0.0f, 0.0f},
-      mRemoteControl(0.05f),   // 摇杆死区：统一交给 Dr16RemoteControl 处理
+      mRemoteControl(0.05f), // 摇杆死区：统一交给 Dr16RemoteControl 处理
       mIsInitComplete(false)
 {
 }
@@ -126,7 +119,7 @@ void CrtChassis::init()
     DWT_Init();
 
     CAN_Init(&hcan1, can1RxCallback);
-    // CAN_Init(&hcan2, can2RxCallback);
+    CAN_Init(&hcan2, can2RxCallback);
 
     UART_Init(&huart3, dr16RxCallback, 36);
 
@@ -134,9 +127,9 @@ void CrtChassis::init()
         mImu->init();
     }
 
-    mVx = 0.0f;
-    mVy = 0.0f;
-    mWz = 0.0f;
+    mVx          = 0.0f;
+    mVy          = 0.0f;
+    mWz          = 0.0f;
     mChassisMode = ChassisNoForce;
 
     mIsInitComplete = true;
@@ -161,21 +154,32 @@ void CrtChassis::imuLoop()
     mEulerAngle = mImu->solveAttitude();
 }
 
-void CrtChassis::receiveChassisMotorDataFromISR(const can_rx_message_t *rxMessage)
+void CrtChassis::receiveChassisDriveMotorDataFromISR(const can_rx_message_t *rxMessage)
 {
     if (rxMessage == nullptr) return;
 
+    // CAN1: 处理驱动电机 (M3508)
+    for (auto &cfg : mModules) {
+        if (cfg.module == nullptr) continue;
+
+        MotorM3508 *driveMotor = cfg.module->getDriveMotor();
+        if (driveMotor != nullptr) {
+            if (driveMotor->decodeCanRxMessageFromISR(rxMessage)) return;
+        }
+    }
+}
+
+void CrtChassis::receiveChassisSteerMotorDataFromISR(const can_rx_message_t *rxMessage)
+{
+    if (rxMessage == nullptr) return;
+
+    // CAN2: 处理舵向电机 (GM6020)
     for (auto &cfg : mModules) {
         if (cfg.module == nullptr) continue;
 
         MotorGM6020 *steerMotor = cfg.module->getSteerMotor();
-        MotorM3508  *driveMotor = cfg.module->getDriveMotor();
-
         if (steerMotor != nullptr) {
             if (steerMotor->decodeCanRxMessageFromISR(rxMessage)) return;
-        }
-        if (driveMotor != nullptr) {
-            if (driveMotor->decodeCanRxMessageFromISR(rxMessage)) return;
         }
     }
 }
@@ -202,13 +206,28 @@ void CrtChassis::update(float dt)
         if (cfg.wheelRadius <= 1e-6f) continue;
 
         /* Swerve kinematics (body frame):
-           wheelV = [vx, vy] + wz x r => [vx - wz*y, vy + wz*x] */
-        const float wheelVx = mVx - mWz * cfg.wheelY;
-        const float wheelVy = mVy + mWz * cfg.wheelX;
+           速度定义: mVx=横向(X), mVy=前后(Y), mWz=旋转角速度
+           wheelV = [vx, vy] + wz x r => [vx + wz*x, vy - wz*y]
+           注意：mWz 需要乘以 rotationGain 来匹配平移速度量级 */
+        const float wheelVx = mVx + mWz * rotationGain * cfg.wheelX; // X分量：横向速度
+        const float wheelVy = mVy - mWz * rotationGain * cfg.wheelY; // Y分量：前后速度
 
-        const float targetAngle = std::atan2(wheelVy, wheelVx);                     // rad
         const float linearSpeed = std::sqrt(wheelVx * wheelVx + wheelVy * wheelVy); // m/s
-        const float targetSpeed = linearSpeed / cfg.wheelRadius;                    // rad/s
+
+        /* 当速度接近0时，保持当前舵向角度，避免回到原点 */
+        constexpr float SPEED_THRESHOLD = 0.001f; // 速度阈值 (m/s)
+
+        if (linearSpeed < SPEED_THRESHOLD) {
+            /* 速度为0：保持当前实际角度，速度设为0 */
+            MotorGM6020 *steerMotor = cfg.module->getSteerMotor();
+            float currentAngle      = steerMotor ? steerMotor->getCurrentAngle() : 0.0f;
+            cfg.module->setTarget(currentAngle, 0.0f);
+            cfg.module->update(dt);
+            continue;
+        }
+
+        const float targetAngle = std::atan2(wheelVy, wheelVx) - (float)M_PI / 2.0f;
+        const float targetSpeed = linearSpeed / cfg.wheelRadius; // rad/s
 
         cfg.module->setTarget(targetAngle, targetSpeed);
         cfg.module->update(dt);
@@ -253,15 +272,15 @@ void CrtChassis::targetSpeedPlan()
     }
 
     if (mChassisMode == ManualControl) {
-        const fp32 leftX  = mRemoteControl.getLeftStickX();
-        //const fp32 leftY  = mRemoteControl.getLeftStickY();
+        const fp32 leftX = mRemoteControl.getLeftStickX();
+        // const fp32 leftY  = mRemoteControl.getLeftStickY();
         const fp32 rightX = mRemoteControl.getRightStickX();
         const fp32 rightY = mRemoteControl.getRightStickY();
 
         /* 约定：左摇杆平移，右摇杆X旋转（坐标系符号后续统一） */
-        mVx = rightX;
-        mVy = rightY;
-        mWz = leftX;
+        mVx = -rightX; // 右摇杆X → 横向
+        mVy = rightY;  // 右摇杆Y → 前后
+        mWz = -leftX;  // 左摇杆X
         return;
     }
 
@@ -278,7 +297,7 @@ void CrtChassis::motorControl()
             if (auto *s = cfg.module->getSteerMotor()) s->openloopControl(0.0f);
             if (auto *d = cfg.module->getDriveMotor()) d->openloopControl(0.0f);
         }
-        return; 
+        return;
     }
 
     update(controlDt);
@@ -306,16 +325,20 @@ void CrtChassis::transmitChassisMotorData()
     MotorM3508 *driveBR = moduleBR->getDriveMotor();
     MotorM3508 *driveFR = moduleFR->getDriveMotor();
 
-    /* 默认：舵向4电机同一控制帧（常见0x1FF），驱动4电机同一控制帧（常见0x200），均在 CAN1
+    /* CAN 分配：
+       - CAN1: 驱动电机 M3508 (4个，ID 1-4，TX ID 0x200)
+       - CAN2: 舵向电机 GM6020 (4个，ID 1-4，TX ID 0x1FF)
        装车后若 CAN口/控制ID 分配变化，仅需在此函数拆分/调整发送，不影响上层控制链路。 */
 
+    // CAN2: 舵向电机
     if (steerFL && steerBL && steerBR && steerFR) {
-        HAL_CAN_AddTxMessage(&hcan1,
+        HAL_CAN_AddTxMessage(&hcan2,
                              steerFL->getMotorControlHeader(),
                              (*steerFL + *steerBL + *steerBR + *steerFR).getMotorControlData(),
                              NULL);
     }
 
+    // CAN1: 驱动电机
     if (driveFL && driveBL && driveBR && driveFR) {
         HAL_CAN_AddTxMessage(&hcan1,
                              driveFL->getMotorControlHeader(),

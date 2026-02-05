@@ -33,16 +33,14 @@ class CrtChassis
 {
 public:
     /* 底盘控制模式 */
-    enum ChassisMode
-    {
-        ChassisNoForce = 0,  // 无力/急停
-        ManualControl,       // 手动遥控
-        AutoControl          // 自动/视觉控制（预留）
+    enum ChassisMode {
+        ChassisNoForce = 0, // 无力/急停
+        ManualControl,      // 手动遥控
+        AutoControl         // 自动/视觉控制（预留）
     };
 
     /* 舵轮模块配置（mModules 顺序固定：0=FL, 1=BL, 2=BR, 3=FR） */
-    struct Config
-    {
+    struct Config {
         CrtModule *module; // 舵轮模块实例（外部管理生命周期）
         float wheelX;      // 安装位置 X (m)
         float wheelY;      // 安装位置 Y (m)
@@ -75,9 +73,16 @@ public:
     void imuLoop();
 
     /**
-     * @brief ISR：接收底盘电机 CAN 数据入口（由 canRxCallback 转发）
+     * @brief ISR：接收底盘驱动电机 CAN 数据入口（由 CAN1 回调转发）
+     * @note  处理 4 个 M3508 驱动电机的反馈
      */
-    void receiveChassisMotorDataFromISR(const can_rx_message_t *rxMessage);
+    void receiveChassisDriveMotorDataFromISR(const can_rx_message_t *rxMessage);
+
+    /**
+     * @brief ISR：接收底盘舵向电机 CAN 数据入口（由 CAN2 回调转发）
+     * @note  处理 4 个 GM6020 舵向电机的反馈
+     */
+    void receiveChassisSteerMotorDataFromISR(const can_rx_message_t *rxMessage);
 
     /**
      * @brief ISR：接收遥控器数据入口（由 dr16RxCallback 转发）
@@ -101,9 +106,9 @@ private:
 
     ChassisMode mChassisMode;
 
-    float mVx;
-    float mVy;
-    float mWz;
+    float mVx; // 前向速度 (m/s)，向前为正
+    float mVy; // 横向速度 (m/s)，向左为正
+    float mWz; // 旋转角速度 (rad/s)，顺时针为正
 
     IMU *mImu;
     GSRLMath::Vector3f mEulerAngle;
@@ -118,7 +123,6 @@ private:
     void targetSpeedPlan();
     void motorControl();
     void transmitChassisMotorData();
-
 };
 
 /* Exported constants --------------------------------------------------------*/

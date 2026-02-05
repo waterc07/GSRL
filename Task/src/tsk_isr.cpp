@@ -33,10 +33,12 @@ void dr16RxCallback(uint8_t *Buffer, uint16_t Length)
 
 void can1RxCallback(can_rx_message_t *pRxMsg)
 {
-    chassis.receiveChassisMotorDataFromISR(pRxMsg);
+    // CAN1: 驱动电机 (M3508)
+    chassis.receiveChassisDriveMotorDataFromISR(pRxMsg);
 }
 
-// void can2RxCallback(can_rx_message_t *pRxMsg)
-// {
-//     chassis.receiveChassisCan2MotorDataFromISR(pRxMsg);
-// }
+void can2RxCallback(can_rx_message_t *pRxMsg)
+{
+    // CAN2: 舵向电机 (GM6020)
+    chassis.receiveChassisSteerMotorDataFromISR(pRxMsg);
+}
